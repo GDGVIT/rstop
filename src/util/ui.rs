@@ -2,7 +2,8 @@ use crate::util::App;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Row, Table},
+    symbols,
+    widgets::{Block, Borders, Chart, Dataset, Row, Table},
     Frame,
 };
 
@@ -21,12 +22,19 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     draw_third_row(f, app, chunks[2]);
 }
 
-fn draw_first_row<B>(f: &mut Frame<B>, _app: &mut App, area: Rect)
+fn draw_first_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
 where
     B: Backend,
 {
-    let block = Block::default().borders(Borders::ALL).title(" CPU Usage ");
-    f.render_widget(block, area);
+    //let block = Block::default().borders(Borders::ALL).title(" CPU Usage ");
+    let datasets = vec![Dataset::default()
+        .name(" CPU0 ")
+        .marker(symbols::Marker::Dot)
+        .data(&app.cpu_usage_points)];
+
+    let chart =
+        Chart::new(datasets).block(Block::default().title(" Disk Usage ").borders(Borders::ALL));
+    f.render_widget(chart, area);
 }
 
 fn draw_second_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
