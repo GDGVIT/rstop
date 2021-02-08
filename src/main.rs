@@ -1,13 +1,13 @@
 mod logger;
 mod util;
 
-use std::{error::Error, io, sync::mpsc, thread};
+use std::{error::Error, io};
 use sysinfo::SystemExt;
-use termion::{input::TermRead, raw::IntoRawMode};
+use termion::raw::IntoRawMode;
 use tui::{backend::TermionBackend, Terminal};
 
 use crate::logger::Logger;
-use crate::util::{ui, App};
+use crate::util::{event, ui, App};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let stdout = io::stdout().into_raw_mode()?;
@@ -17,45 +17,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = App::new("rstop", 100);
-    let mut app_clone = app.clone();
     let mut logger = Logger::init();
 
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || loop {
-        for c in io::stdin().keys() {
-            match c {
-                Ok(key) => {
-                    match tx.send(key) {
-                        Ok(_) => {}
-                        Err(err) => {
-                            eprintln!("{}", err);
-                        }
-                    }
-                    app_clone.on_key(key);
-                }
-                Err(_) => {}
-            }
-            break;
-        }
-    });
+    let events = event::Events::default();
 
     loop {
         let mut system = sysinfo::System::new_all();
-        app.refresh(&mut system, &mut logger);
         terminal.draw(|f| ui::draw(f, &mut app))?;
 
-        match rx.recv() {
-            Ok(key) => app.on_key(key),
-            Err(_) => {}
+        match &events.next_event()? {
+            event::Event::Input(key) => app.on_key(&key),
+            event::Event::Tick => app.refresh(&mut system, &mut logger),
         }
-
-        //for c in stdin.keys() {
-        //    match c {
-        //        Ok(key) => app.on_key(key),
-        //        Err(_) => {}
-        //    }
-        //    break;
-        //}
 
         if app.should_quit {
             break;
@@ -63,10 +36,4 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
-
-    //terminal.draw(|f| {
-    //    let size = f.size();
-    //    let block = Block::default().title("Block").borders(Borders::ALL);
-    //    f.render_widget(block, size);
-    //})?;
 }

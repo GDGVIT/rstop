@@ -146,7 +146,7 @@ impl App {
         //    .collect();
     }
 
-    pub fn on_key(&mut self, key: Key) {
+    pub fn on_key(&mut self, key: &Key) {
         match key {
             Key::Char('q') => {
                 self.should_quit = true;
