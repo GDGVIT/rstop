@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new("rstop", 100);
+    let mut app = App::new("rstop", 27);
     let mut logger = Logger::init();
 
     let events = event::Events::default();

@@ -28,6 +28,8 @@ impl App {
     }
 
     pub fn refresh<T: SystemExt>(&mut self, system: &mut T, logger: &mut Logger) {
+        system.refresh_all();
+
         //Setting the Temperatures section data
         let temps: Vec<Vec<String>> = system
             .get_components()
@@ -54,7 +56,10 @@ impl App {
             .collect();
         self.temps = temps;
 
-        if let Ok(_) = logger.add_log(format!("Temp Entry Data Point: {} - ", self.temps[0][0])) {}
+        //if let Ok(_) = logger.add_log(format!(
+        //    "Temp Entry Data Point: {} - {}",
+        //    self.temps[0][0], self.temps[0][1]
+        //)) {}
 
         //Setting the Disk Usage section data
         let disk_usage: Vec<Vec<String>> = system
@@ -99,27 +104,51 @@ impl App {
             .collect();
         self.disk_usage = disk_usage;
 
+        //for (i, ele) in system.get_processors().iter().enumerate() {
+        //    if let Ok(_) = logger.add_log(format!("Processor {}: {}\n", i, ele.get_cpu_usage())) {}
+        //}
+
         //Setting the cpu_usage section data
         let x = &system.get_processors()[0];
-        let l = self.cpu_usage_points.len();
 
         let mut log: String = String::from("");
         let mut q: Queue<(f64, f64)> = Queue::with_capacity(self.max_capacity_queue);
 
-        if l < self.max_capacity_queue {
-            if let Ok(_) = self
-                .cpu_usage_queue
-                .queue((l as f64, x.get_cpu_usage() as f64))
-            {}
+        let current_usage: f64 = x.get_cpu_usage() as f64;
 
-            if let Ok(_) = logger.add_log(format!("Entry Data Point: {} - ", x.get_cpu_usage())) {}
+        //log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
+        //log += &format!("Usage Points Queue: {:?}\n", self.cpu_usage_queue);
 
-            if let Some(ele) = self.cpu_usage_queue.peek() {
-                log += &format!("Added: ({}, {}),\t", ele.0, ele.1,);
+        if self.cpu_usage_points.len() < self.max_capacity_queue {
+            let l = self.cpu_usage_points.len();
+
+            match self.cpu_usage_queue.peek() {
+                Some(ele) => {
+                    //let usage = current_usage - ele.1;
+                    if let Ok(_) = self.cpu_usage_queue.queue((l as f64, current_usage)) {}
+                    log += &format!("Added: ({}, {}),\t", ele.0, current_usage);
+                }
+                None => {
+                    log += &format!("Error adding: {}\t", l);
+                }
             }
+
+            if l == 0 {
+                if let Ok(_) = self.cpu_usage_queue.queue((0.0, 0.0)) {
+                    log += &format!("Added: (0, 0),\t");
+                }
+            }
+
+        //if let Ok(_) = logger.add_log(format!("Entry Data Point: {}", x.get_cpu_usage())) {}
         } else {
-            self.cpu_usage_queue
-                .force_queue((0.0, x.get_cpu_usage() as f64));
+            let l = self.cpu_usage_points.len();
+            if let Some(ele) = self.cpu_usage_queue.peek() {
+                //let usage = current_usage - ele.1;
+                self.cpu_usage_queue.force_queue((0.0, current_usage));
+                log += &format!("Added1: ({}, {}),\t", ele.0, current_usage);
+            } else {
+                log += &format!("Error adding: {}\t", l);
+            }
 
             let v = self.cpu_usage_queue.vec();
 
@@ -127,15 +156,18 @@ impl App {
                 if let Ok(_) = q.queue((i as f64, ele.1)) {
                     //self.cpu_usage_points
                 }
+
                 log += &format!("({}, {}), ", i as f64, ele.1);
             }
-
-            self.cpu_usage_points = self.cpu_usage_queue.vec().to_owned();
             self.cpu_usage_queue = q;
-
-            if let Ok(_) = logger.add_log(log) {}
         }
 
+        self.cpu_usage_points = self.cpu_usage_queue.vec().clone();
+
+        log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
+        //log += &format!("Usage Points Queue: {:?}", self.cpu_usage_queue);
+
+        if let Ok(_) = logger.add_log(log) {}
         if let Ok(_) = logger.add_log("\nIteration Over\n") {}
 
         //let _a: Vec<()> = system
