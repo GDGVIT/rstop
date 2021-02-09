@@ -1,6 +1,6 @@
 use crate::logger::Logger;
 use queue::Queue;
-use sysinfo::{DiskExt, ProcessorExt, SystemExt};
+use sysinfo::{DiskExt, Processor, ProcessorExt, SystemExt};
 use termion::event::Key;
 
 #[derive(Clone)]
@@ -9,8 +9,8 @@ pub struct App {
     pub temps: Vec<Vec<String>>,
     pub disk_usage: Vec<Vec<String>>,
     pub should_quit: bool,
-    pub cpu_usage_queue: Queue<(f64, f64)>,
-    pub cpu_usage_points: Vec<(f64, f64)>,
+    pub cpu_usage_queue: Vec<Queue<(f64, f64)>>,
+    pub cpu_usage_points: Vec<Vec<(f64, f64)>>,
     pub max_capacity_queue: usize,
 }
 
@@ -21,8 +21,8 @@ impl App {
             temps: vec![vec![]],
             disk_usage: vec![vec![]],
             should_quit: false,
-            cpu_usage_queue: Queue::with_capacity(max_capacity_queue),
-            cpu_usage_points: vec![],
+            cpu_usage_queue: vec![Queue::with_capacity(max_capacity_queue); max_capacity_queue],
+            cpu_usage_points: vec![vec![]; max_capacity_queue],
             max_capacity_queue,
         }
     }
@@ -55,11 +55,6 @@ impl App {
             })
             .collect();
         self.temps = temps;
-
-        //if let Ok(_) = logger.add_log(format!(
-        //    "Temp Entry Data Point: {} - {}",
-        //    self.temps[0][0], self.temps[0][1]
-        //)) {}
 
         //Setting the Disk Usage section data
         let disk_usage: Vec<Vec<String>> = system
@@ -104,29 +99,33 @@ impl App {
             .collect();
         self.disk_usage = disk_usage;
 
-        //for (i, ele) in system.get_processors().iter().enumerate() {
-        //    if let Ok(_) = logger.add_log(format!("Processor {}: {}\n", i, ele.get_cpu_usage())) {}
-        //}
+        for (i, cpu_no) in system.get_processors().iter().enumerate() {
+            //if let Ok(_) = logger.add_log(format!("Processor {}: {}\n", i, ele.get_cpu_usage())) {}
 
-        //Setting the cpu_usage section data
-        let x = &system.get_processors()[0];
+            //Setting the cpu_usage section data
+            self.calculate_new_queue(cpu_no, logger, i);
+        }
 
+        if let Ok(_) = logger.add_log("\nIteration Over\n") {}
+    }
+
+    fn calculate_new_queue(&mut self, cpu_no: &Processor, logger: &mut Logger, i: usize) {
         let mut log: String = String::from("");
         let mut q: Queue<(f64, f64)> = Queue::with_capacity(self.max_capacity_queue);
 
-        let current_usage: f64 = x.get_cpu_usage() as f64;
+        let current_usage: f64 = cpu_no.get_cpu_usage() as f64;
 
-        //log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
-        //log += &format!("Usage Points Queue: {:?}\n", self.cpu_usage_queue);
+        if self.cpu_usage_points[i].len() < self.max_capacity_queue {
+            let l = self.cpu_usage_points[i].len();
 
-        if self.cpu_usage_points.len() < self.max_capacity_queue {
-            let l = self.cpu_usage_points.len();
-
-            match self.cpu_usage_queue.peek() {
-                Some(ele) => {
-                    //let usage = current_usage - ele.1;
-                    if let Ok(_) = self.cpu_usage_queue.queue((l as f64, current_usage)) {}
-                    log += &format!("Added: ({}, {}),\t", ele.0, current_usage);
+            match self.cpu_usage_queue[i].peek() {
+                Some(_) => {
+                    //let usage = current_usage - ele.1
+                    if let Ok(_) =
+                        self.cpu_usage_queue[i].queue((l as f64, (current_usage - 50.0) / 10.0))
+                    {
+                    }
+                    //log += &format!("Added: ({}, {}),\t", ele.0, current_usage);
                 }
                 None => {
                     log += &format!("Error adding: {}\t", l);
@@ -134,48 +133,35 @@ impl App {
             }
 
             if l == 0 {
-                if let Ok(_) = self.cpu_usage_queue.queue((0.0, 0.0)) {
-                    log += &format!("Added: (0, 0),\t");
+                if let Ok(_) = self.cpu_usage_queue[i].queue((0.0, 0.0)) {
+                    //log += &format!("Added: (0, 0),\t");
                 }
             }
-
-        //if let Ok(_) = logger.add_log(format!("Entry Data Point: {}", x.get_cpu_usage())) {}
         } else {
-            let l = self.cpu_usage_points.len();
-            if let Some(ele) = self.cpu_usage_queue.peek() {
+            let l = self.cpu_usage_points[i].len();
+            if let Some(_) = self.cpu_usage_queue[i].peek() {
                 //let usage = current_usage - ele.1;
-                self.cpu_usage_queue.force_queue((0.0, current_usage));
-                log += &format!("Added1: ({}, {}),\t", ele.0, current_usage);
+                self.cpu_usage_queue[i].force_queue((0.0, (current_usage - 50.0) / 10.0));
+            //log += &format!("Added1: ({}, {}),\t", ele.0, current_usage);
             } else {
                 log += &format!("Error adding: {}\t", l);
             }
 
-            let v = self.cpu_usage_queue.vec();
+            let v = self.cpu_usage_queue[i].vec();
 
             for (i, ele) in v.iter().enumerate() {
-                if let Ok(_) = q.queue((i as f64, ele.1)) {
-                    //self.cpu_usage_points
-                }
+                if let Ok(_) = q.queue((i as f64, ele.1)) {}
 
                 log += &format!("({}, {}), ", i as f64, ele.1);
             }
-            self.cpu_usage_queue = q;
+            self.cpu_usage_queue[i] = q;
         }
 
-        self.cpu_usage_points = self.cpu_usage_queue.vec().clone();
+        self.cpu_usage_points[i] = self.cpu_usage_queue[i].vec().clone();
 
-        log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
-        //log += &format!("Usage Points Queue: {:?}", self.cpu_usage_queue);
+        //log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
 
         if let Ok(_) = logger.add_log(log) {}
-        if let Ok(_) = logger.add_log("\nIteration Over\n") {}
-
-        //let _a: Vec<()> = system
-        //    .get_processors()
-        //    .iter()
-        //    .map(|x| {
-        //    })
-        //    .collect();
     }
 
     pub fn on_key(&mut self, key: &Key) {
