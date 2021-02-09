@@ -16,14 +16,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new("rstop", 27);
+    let mut app = App::new("rstop", 20);
     let mut logger = Logger::init();
 
     let events = event::Events::default();
 
     loop {
         let mut system = sysinfo::System::new_all();
-        terminal.draw(|f| ui::draw(f, &mut app))?;
+        terminal.draw(|f| ui::draw(f, &mut app, &mut logger))?;
 
         match &events.next_event()? {
             event::Event::Input(key) => app.on_key(&key),

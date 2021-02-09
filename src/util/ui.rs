@@ -1,13 +1,17 @@
+use crate::logger::Logger;
 use crate::util::App;
+
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
     symbols,
-    widgets::{Block, Borders, Chart, Dataset, Row, Table},
+    text::Span,
+    widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Row, Table},
     Frame,
 };
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App, logger: &mut Logger) {
     let chunks = Layout::default()
         .constraints([
             Constraint::Ratio(1, 3),
@@ -17,23 +21,69 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .vertical_margin(2)
         .split(f.size());
 
-    draw_first_row(f, app, chunks[0]);
+    draw_first_row(f, app, chunks[0], logger);
     draw_second_row(f, app, chunks[1]);
     draw_third_row(f, app, chunks[2]);
 }
 
-fn draw_first_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+fn map_color_to_index(i: usize) -> Color {
+    match i {
+        0 => Color::Cyan,
+        1 => Color::Yellow,
+        2 => Color::Red,
+        3 => Color::Blue,
+        4 => Color::Green,
+        5 => Color::Magenta,
+        _ => Color::White,
+    }
+}
+
+fn draw_first_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect, logger: &mut Logger)
 where
     B: Backend,
 {
-    //let block = Block::default().borders(Borders::ALL).title(" CPU Usage ");
-    let datasets = vec![Dataset::default()
-        .name(" CPU0 ")
-        .marker(symbols::Marker::Dot)
-        .data(&app.cpu_usage_points)];
+    let mut datasets = vec![];
+    for (i, ele) in app.cpu_usage_points.iter().enumerate() {
+        datasets.push(
+            Dataset::default()
+                .name(format!(" CPU{} ", i))
+                .marker(symbols::Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(map_color_to_index(i)))
+                .data(&ele),
+        );
+    }
 
-    let chart =
-        Chart::new(datasets).block(Block::default().title(" Disk Usage ").borders(Borders::ALL));
+    if let Ok(_) = logger.add_log(format!("Chart Data Received: {:?}", app.cpu_usage_points)) {}
+
+    let chart_legend_constraints = (Constraint::Ratio(1, 3), Constraint::Ratio(1, 4));
+
+    let chart = Chart::new(datasets)
+        .block(
+            Block::default()
+                .title(Span::styled(
+                    " CPU Usage ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ))
+                .borders(Borders::ALL),
+        )
+        .hidden_legend_constraints(chart_legend_constraints)
+        .x_axis(
+            Axis::default()
+                .title("X Axis")
+                .style(Style::default().fg(Color::Gray))
+                .labels(vec![])
+                .bounds([0.0, 20.0]),
+        )
+        .y_axis(
+            Axis::default()
+                .title("Y Axis")
+                .style(Style::default().fg(Color::Gray))
+                .labels(vec![])
+                .bounds([-20.0, 20.0]),
+        );
     f.render_widget(chart, area);
 }
 
