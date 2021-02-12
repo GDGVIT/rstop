@@ -22,7 +22,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App, logger: &mut Logger) {
         .split(f.size());
 
     draw_first_row(f, app, chunks[0], logger);
-    draw_second_row(f, app, chunks[1]);
+    draw_second_row(f, app, chunks[1], logger);
     draw_third_row(f, app, chunks[2]);
 }
 
@@ -38,7 +38,7 @@ fn map_color_to_index(i: usize) -> Color {
     }
 }
 
-fn draw_first_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect, logger: &mut Logger)
+fn draw_first_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect, _logger: &mut Logger)
 where
     B: Backend,
 {
@@ -54,9 +54,7 @@ where
         );
     }
 
-    if let Ok(_) = logger.add_log(format!("Chart Data Received: {:?}", app.cpu_usage_points)) {}
-
-    let chart_legend_constraints = (Constraint::Ratio(1, 3), Constraint::Ratio(1, 4));
+    //let chart_legend_constraints = (Constraint::Ratio(1, 3), Constraint::Ratio(1, 4));
 
     let chart = Chart::new(datasets)
         .block(
@@ -69,7 +67,7 @@ where
                 ))
                 .borders(Borders::ALL),
         )
-        .hidden_legend_constraints(chart_legend_constraints)
+        //.hidden_legend_constraints(chart_legend_constraints)
         .x_axis(
             Axis::default()
                 .title("X Axis")
@@ -87,7 +85,7 @@ where
     f.render_widget(chart, area);
 }
 
-fn draw_second_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+fn draw_second_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect, logger: &mut Logger)
 where
     B: Backend,
 {
@@ -126,8 +124,63 @@ where
         .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)]);
     f.render_widget(table, chunks[1]);
 
-    let block = Block::default().borders(Borders::ALL).title(" Disk Usage ");
-    f.render_widget(block, chunks_horiz[1]);
+    draw_disk_usage(f, app, chunks_horiz[1], logger);
+}
+
+fn draw_disk_usage<B>(f: &mut Frame<B>, app: &mut App, area: Rect, logger: &mut Logger)
+where
+    B: Backend,
+{
+    let datasets = vec![
+        Dataset::default()
+            .name(format!(" Memory "))
+            .marker(symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Red))
+            .data(app.memory.memory_queue.vec()),
+        Dataset::default()
+            .name(format!(" Swap "))
+            .marker(symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Yellow))
+            .data(app.memory.swap_queue.vec()),
+    ];
+
+    let chart = Chart::new(datasets)
+        .block(
+            Block::default()
+                .title(Span::styled(
+                    " CPU Usage ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ))
+                .borders(Borders::ALL),
+        )
+        //.hidden_legend_constraints(chart_legend_constraints)
+        .x_axis(
+            Axis::default()
+                .title("X Axis")
+                .style(Style::default().fg(Color::Gray))
+                .labels(vec![])
+                .bounds([0.0, 20.0]),
+        )
+        .y_axis(
+            Axis::default()
+                .title("Y Axis")
+                .style(Style::default().fg(Color::Gray))
+                .labels(vec![])
+                .bounds([-20.0, 20.0]),
+        );
+
+    if let Ok(_) = logger.add_log(format!(
+        "Memory Chart Data Received: {:?} \n Swap Chart Data Received: {:?}",
+        app.memory.memory_queue, app.memory.swap_queue
+    )) {}
+
+    f.render_widget(chart, area);
+    //let block = Block::default().borders(Borders::ALL).title(" Disk Usage ");
+    //f.render_widget(block, area);
 }
 
 fn draw_third_row<B>(f: &mut Frame<B>, _app: &mut App, area: Rect)
