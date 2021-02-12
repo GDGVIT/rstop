@@ -3,7 +3,7 @@ use queue::Queue;
 use sysinfo::{DiskExt, Processor, ProcessorExt, SystemExt};
 use termion::event::Key;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct App {
     pub name: String,
     pub temps: Vec<Vec<String>>,
@@ -12,6 +12,15 @@ pub struct App {
     pub cpu_usage_queue: Vec<Queue<(f64, f64)>>,
     pub cpu_usage_points: Vec<Vec<(f64, f64)>>,
     pub max_capacity_queue: usize,
+    pub memory: Memory,
+}
+
+#[derive(Clone, Debug)]
+pub struct Memory {
+    pub free_memory: u64,
+    pub free_swap: u64,
+    pub memory_queue: Queue<(f64, f64)>,
+    pub swap_queue: Queue<(f64, f64)>,
 }
 
 impl App {
@@ -24,6 +33,12 @@ impl App {
             cpu_usage_queue: vec![Queue::with_capacity(max_capacity_queue); max_capacity_queue],
             cpu_usage_points: vec![vec![]; max_capacity_queue],
             max_capacity_queue,
+            memory: Memory {
+                memory_queue: Queue::with_capacity(max_capacity_queue),
+                swap_queue: Queue::with_capacity(max_capacity_queue),
+                free_memory: 0,
+                free_swap: 0,
+            },
         }
     }
 
@@ -99,17 +114,100 @@ impl App {
             .collect();
         self.disk_usage = disk_usage;
 
+        //Setting the cpu_usage section data
         for (i, cpu_no) in system.get_processors().iter().enumerate() {
-            //if let Ok(_) = logger.add_log(format!("Processor {}: {}\n", i, ele.get_cpu_usage())) {}
-
-            //Setting the cpu_usage section data
-            self.calculate_new_queue(cpu_no, logger, i);
+            self.calculate_new_queue_processor(cpu_no, logger, i);
         }
+
+        //Setting disk usage section data
+        let memory_scaled: f64 = system.get_free_memory() as f64 / system.get_total_memory() as f64;
+        App::calculate_new_queue_disk(
+            memory_scaled * 10.0,
+            logger,
+            &mut self.memory.memory_queue,
+            self.max_capacity_queue,
+        );
+
+        let swap_scaled: f64 = system.get_free_swap() as f64 / system.get_total_swap() as f64;
+        App::calculate_new_queue_disk(
+            swap_scaled,
+            logger,
+            &mut self.memory.swap_queue,
+            self.max_capacity_queue,
+        );
 
         if let Ok(_) = logger.add_log("\nIteration Over\n") {}
     }
 
-    fn calculate_new_queue(&mut self, cpu_no: &Processor, logger: &mut Logger, i: usize) {
+    pub fn on_key(&mut self, key: &Key) {
+        match key {
+            Key::Char('q') => {
+                self.should_quit = true;
+            }
+            Key::Char('Q') => {
+                self.should_quit = true;
+            }
+            _ => {}
+        }
+    }
+
+    fn calculate_new_queue_disk(
+        val: f64,
+        logger: &mut Logger,
+        queue: &mut Queue<(f64, f64)>,
+        max_capacity_queue: usize,
+    ) {
+        let mut log: String = String::from("");
+        let mut q: Queue<(f64, f64)> = Queue::with_capacity(max_capacity_queue);
+
+        if queue.len() < max_capacity_queue {
+            let l = queue.len();
+
+            match queue.peek() {
+                Some(_) => {
+                    if let Ok(_) = queue.queue((l as f64, val as f64)) {}
+                    //log += &format!("Added: ({}, {}),\t", ele.0, current_usage);
+                }
+                None => {
+                    log += &format!("Error adding: {}\t", l);
+                }
+            }
+
+            if l == 0 {
+                if let Ok(_) = queue.queue((0.0, 0.0)) {
+                    //log += &format!("Added: (0, 0),\t");
+                }
+            }
+        } else {
+            let l = queue.len();
+            if let Some(_) = queue.peek() {
+                queue.force_queue((0.0, val as f64));
+                //log += &format!("Added1: ({}, {}),\t", ele.0, current_usage);
+            } else {
+                log += &format!("Error adding: {}\t", l);
+            }
+
+            let v = queue.vec();
+
+            for (i, ele) in v.iter().enumerate() {
+                if let Ok(_) = q.queue((i as f64, ele.1)) {}
+
+                log += &format!("({}, {}), ", i as f64, ele.1);
+            }
+            *queue = q;
+        }
+
+        //log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
+
+        if let Ok(_) = logger.add_log(log) {}
+    }
+
+    fn calculate_new_queue_processor(
+        &mut self,
+        cpu_no: &Processor,
+        _logger: &mut Logger,
+        i: usize,
+    ) {
         let mut log: String = String::from("");
         let mut q: Queue<(f64, f64)> = Queue::with_capacity(self.max_capacity_queue);
 
@@ -161,18 +259,6 @@ impl App {
 
         //log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
 
-        if let Ok(_) = logger.add_log(log) {}
-    }
-
-    pub fn on_key(&mut self, key: &Key) {
-        match key {
-            Key::Char('q') => {
-                self.should_quit = true;
-            }
-            Key::Char('Q') => {
-                self.should_quit = true;
-            }
-            _ => {}
-        }
+        //if let Ok(_) = logger.add_log(log) {}
     }
 }
