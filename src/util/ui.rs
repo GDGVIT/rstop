@@ -1,5 +1,5 @@
 use crate::logger::Logger;
-use crate::util::App;
+use crate::util::{app::SortBy, App};
 
 use tui::{
     backend::Backend,
@@ -7,7 +7,7 @@ use tui::{
     style::{Color, Modifier, Style},
     symbols,
     text::Span,
-    widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Row, Table},
+    widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Row, Sparkline, Table, TableState},
     Frame,
 };
 
@@ -179,11 +179,76 @@ where
     )) {}
 
     f.render_widget(chart, area);
-    //let block = Block::default().borders(Borders::ALL).title(" Disk Usage ");
-    //f.render_widget(block, area);
 }
 
-fn draw_third_row<B>(f: &mut Frame<B>, _app: &mut App, area: Rect)
+fn draw_network_section<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+where
+    B: Backend,
+{
+    let chunks = Layout::default()
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .margin(1)
+        .split(area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Network Usage ");
+    f.render_widget(block, area);
+
+    let sparkline = Sparkline::default()
+        .block(Block::default().title("Total RX"))
+        .style(Style::default().fg(Color::Cyan))
+        .data(app.network.rx_queue.vec());
+    f.render_widget(sparkline, chunks[0]);
+
+    let sparkline = Sparkline::default()
+        .block(Block::default().title("Total TX"))
+        .style(Style::default().fg(Color::Blue))
+        .data(app.network.tx_queue.vec());
+    f.render_widget(sparkline, chunks[1]);
+}
+
+fn draw_process_section<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+where
+    B: Backend,
+{
+    //let block = Block::default().borders(Borders::ALL).title(" Processes ");
+    //f.render_widget(block, area);
+
+    let rows = app.process.process_list.iter().map(|s| {
+        Row::new(vec![
+            s.0.to_string(),
+            s.1.to_string(),
+            s.2.to_string(),
+            s.3.to_string(),
+        ])
+        .style(Style::default().fg(Color::Cyan))
+    });
+    let table = Table::new(rows)
+        .header(
+            match app.process.sort_by {
+                SortBy::CPU => Row::new(vec!["Pid", "Process", "CPU", "Mem"]),
+                SortBy::MEMORY => Row::new(vec!["Pid", "Process", "CPU", "Mem"]),
+            }
+            .style(Style::default().fg(Color::Yellow))
+            .bottom_margin(1),
+        )
+        .block(Block::default().title(" Processes ").borders(Borders::ALL))
+        .highlight_style(Style::default().fg(Color::LightRed))
+        .widths(&[
+            Constraint::Percentage(10),
+            Constraint::Percentage(70),
+            Constraint::Percentage(10),
+            Constraint::Percentage(10),
+        ]);
+
+    let mut state = TableState::default();
+    state.select(Some(app.process.active_index));
+
+    f.render_stateful_widget(table, area, &mut state);
+}
+
+fn draw_third_row<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
 where
     B: Backend,
 {
@@ -192,11 +257,6 @@ where
         .direction(Direction::Horizontal)
         .split(area);
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(" Network Usage ");
-    f.render_widget(block, chunks[0]);
-
-    let block = Block::default().borders(Borders::ALL).title(" Processes ");
-    f.render_widget(block, chunks[1]);
+    draw_network_section(f, app, chunks[0]);
+    draw_process_section(f, app, chunks[1]);
 }

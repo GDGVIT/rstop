@@ -1,9 +1,10 @@
+use std::iter::Iterator;
+
 use crate::logger::Logger;
 use queue::Queue;
-use sysinfo::{DiskExt, Processor, ProcessorExt, SystemExt};
-use termion::event::Key;
+use sysinfo::{DiskExt, NetworkExt, ProcessExt, Processor, ProcessorExt, SystemExt};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct App {
     pub name: String,
     pub temps: Vec<Vec<String>>,
@@ -13,6 +14,8 @@ pub struct App {
     pub cpu_usage_points: Vec<Vec<(f64, f64)>>,
     pub max_capacity_queue: usize,
     pub memory: Memory,
+    pub network: Network,
+    pub process: Process,
 }
 
 #[derive(Clone, Debug)]
@@ -22,6 +25,30 @@ pub struct Memory {
     pub memory_queue: Queue<(f64, f64)>,
     pub swap_queue: Queue<(f64, f64)>,
 }
+
+#[derive(Clone, Debug)]
+pub struct Network {
+    pub rx_queue: Queue<u64>,
+    pub tx_queue: Queue<u64>,
+}
+
+#[derive(Debug)]
+pub struct Process {
+    pub process_list: Vec<(sysinfo::Pid, String, f32, u64)>,
+    pub active_index: usize,
+    pub sort_by: SortBy,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub enum SortBy {
+    CPU,
+    MEMORY,
+}
+
+//trait QueueTypes: Copy {}
+//
+//impl QueueTypes for (f64, f64) {}
+//impl QueueTypes for u64 {}
 
 impl App {
     pub fn new(name: &str, max_capacity_queue: usize) -> App {
@@ -38,6 +65,15 @@ impl App {
                 swap_queue: Queue::with_capacity(max_capacity_queue),
                 free_memory: 0,
                 free_swap: 0,
+            },
+            network: Network {
+                rx_queue: Queue::with_capacity(max_capacity_queue),
+                tx_queue: Queue::with_capacity(max_capacity_queue),
+            },
+            process: Process {
+                process_list: vec![],
+                active_index: 0,
+                sort_by: SortBy::CPU,
             },
         }
     }
@@ -136,19 +172,40 @@ impl App {
             self.max_capacity_queue,
         );
 
-        if let Ok(_) = logger.add_log("\nIteration Over\n") {}
-    }
-
-    pub fn on_key(&mut self, key: &Key) {
-        match key {
-            Key::Char('q') => {
-                self.should_quit = true;
-            }
-            Key::Char('Q') => {
-                self.should_quit = true;
-            }
-            _ => {}
+        let mut tx_val: u64 = 0;
+        let mut rx_val: u64 = 0;
+        for (_, network) in system.get_networks() {
+            rx_val += network.get_received();
+            tx_val += network.get_transmitted();
         }
+
+        self.network.rx_queue.force_queue(rx_val);
+        self.network.tx_queue.force_queue(tx_val);
+
+        //Setting process usage section
+        self.process.process_list = vec![];
+        for (_, process) in system.get_processes() {
+            self.process.process_list.push((
+                process.pid(),
+                process.name().to_string(),
+                process.cpu_usage(),
+                process.disk_usage().total_written_bytes,
+            ));
+        }
+
+        if self.process.sort_by == SortBy::CPU {}
+        match self.process.sort_by {
+            SortBy::CPU => self.process.process_list.sort_by(|a, b| {
+                if let Some(x) = a.2.partial_cmp(&b.2) {
+                    x
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            }),
+            SortBy::MEMORY => self.process.process_list.sort_by(|a, b| a.3.cmp(&b.3)),
+        }
+
+        if let Ok(_) = logger.add_log("\nIteration Over\n") {}
     }
 
     fn calculate_new_queue_disk(
@@ -223,7 +280,6 @@ impl App {
                         self.cpu_usage_queue[i].queue((l as f64, (current_usage - 50.0) / 10.0))
                     {
                     }
-                    //log += &format!("Added: ({}, {}),\t", ele.0, current_usage);
                 }
                 None => {
                     log += &format!("Error adding: {}\t", l);
@@ -231,16 +287,13 @@ impl App {
             }
 
             if l == 0 {
-                if let Ok(_) = self.cpu_usage_queue[i].queue((0.0, 0.0)) {
-                    //log += &format!("Added: (0, 0),\t");
-                }
+                if let Ok(_) = self.cpu_usage_queue[i].queue((0.0, 0.0)) {}
             }
         } else {
             let l = self.cpu_usage_points[i].len();
             if let Some(_) = self.cpu_usage_queue[i].peek() {
                 //let usage = current_usage - ele.1;
                 self.cpu_usage_queue[i].force_queue((0.0, (current_usage - 50.0) / 10.0));
-            //log += &format!("Added1: ({}, {}),\t", ele.0, current_usage);
             } else {
                 log += &format!("Error adding: {}\t", l);
             }
@@ -256,9 +309,23 @@ impl App {
         }
 
         self.cpu_usage_points[i] = self.cpu_usage_queue[i].vec().clone();
-
-        //log += &format!("Usage Points Vector: {:?}\n", self.cpu_usage_points);
-
-        //if let Ok(_) = logger.add_log(log) {}
     }
+
+    pub fn quit(&mut self) {
+        self.should_quit = true;
+    }
+
+    pub fn decrease_index(&mut self) {
+        if self.process.active_index > 1 {
+            self.process.active_index -= 1;
+        }
+    }
+
+    pub fn increase_index(&mut self) {
+        if self.process.active_index < self.process.process_list.len() {
+            self.process.active_index += 1;
+        }
+    }
+
+    pub fn kill(&mut self) {}
 }

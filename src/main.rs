@@ -19,14 +19,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut app = App::new("rstop", 20);
     let mut logger = Logger::init();
 
-    let events = event::Events::default();
+    let mut events = event::Events::default();
 
     loop {
         let mut system = sysinfo::System::new_all();
         terminal.draw(|f| ui::draw(f, &mut app, &mut logger))?;
 
         match &events.next_event()? {
-            event::Event::Input(key) => app.on_key(&key),
+            event::Event::Input(key) => events.on_key(&key, &mut app),
             event::Event::Tick => app.refresh(&mut system, &mut logger),
         }
 
