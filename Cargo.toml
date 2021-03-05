@@ -12,3 +12,5 @@ sysinfo = { git = "https://github.com/GuillaumeGomez/sysinfo" }
 tui = "0.14.0"
 termion = "1.5"
 queue = "*"
+futures = "*"
+tokio = {version="1.2", features=["full"]}

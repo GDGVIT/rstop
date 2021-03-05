@@ -1,4 +1,5 @@
 use std::{io, sync::mpsc, thread, time::Duration};
+use sysinfo::SystemExt;
 use termion::{event::Key, input::TermRead};
 
 use crate::util::App;
@@ -68,7 +69,7 @@ impl Events {
         self.last_event = Event::Input(Key::Char('m'))
     }
 
-    pub fn on_key(&mut self, key: &Key, app: &mut App) {
+    pub fn on_key<T: SystemExt>(&mut self, key: &Key, app: &mut App, system: &mut T) {
         match key {
             Key::Char('q') => app.quit(),
             Key::Char('Q') => app.quit(),
@@ -78,7 +79,7 @@ impl Events {
             Key::Char('k') => app.decrease_index(),
             Key::Char('d') => {
                 if self.last_event == Event::Input(Key::Char('d')) {
-                    app.kill();
+                    app.kill(system);
                     self.reset_last_event();
                 }
             }

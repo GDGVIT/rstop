@@ -150,7 +150,7 @@ where
         .block(
             Block::default()
                 .title(Span::styled(
-                    " CPU Usage ",
+                    " Disk Usage ",
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
@@ -212,9 +212,6 @@ fn draw_process_section<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
 where
     B: Backend,
 {
-    //let block = Block::default().borders(Borders::ALL).title(" Processes ");
-    //f.render_widget(block, area);
-
     let rows = app.process.process_list.iter().map(|s| {
         Row::new(vec![
             s.0.to_string(),
@@ -227,8 +224,8 @@ where
     let table = Table::new(rows)
         .header(
             match app.process.sort_by {
-                SortBy::CPU => Row::new(vec!["Pid", "Process", "CPU", "Mem"]),
-                SortBy::MEMORY => Row::new(vec!["Pid", "Process", "CPU", "Mem"]),
+                SortBy::CPU => Row::new(vec!["Pid", "Process", "CPU^", "Mem"]),
+                SortBy::MEMORY => Row::new(vec!["Pid", "Process", "CPU", "Mem^"]),
             }
             .style(Style::default().fg(Color::Yellow))
             .bottom_margin(1),
